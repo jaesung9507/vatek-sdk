@@ -1,9 +1,4 @@
-﻿#include <stdio.h>
-#include <vatek_sdk_usbstream.h>
-#include <core/ui/ui_props/ui_props_chip.h>
-
-#define _disp_l(fmt,...)	printf("	"fmt"\r\n",##__VA_ARGS__)
-#define _disp_err(fmt,...)	printf("	error - "fmt"\r\n",##__VA_ARGS__)
+﻿#include <vatek_sdk_usbstream.h>
 
 typedef void* hstream_source;
 typedef vatek_result(*fpstream_source_start)(hstream_source hsource);
@@ -28,37 +23,8 @@ typedef struct vatek_context {
 	tsstream_source streamsource;
 	hmux_core hmux;
 	hmux_channel m_hchannel;
+	usbstream_param usbcmd;
 } VatekContext;
-
-static usbstream_param usbcmd = {
-	.mode = ustream_mode_sync,
-	.remux = ustream_remux_pcr,
-	.pcradjust = pcr_adjust,
-	.r2param.freqkhz = 473000,							/* output _rf frequency */
-	.r2param.mode = r2_cntl_path_0,
-	.modulator = {
-		6,
-		modulator_dvb_t,
-		ifmode_disable,0,0,
-		.mod = {.dvb_t = {dvb_t_qam64, fft_8k, guard_interval_1_16, coderate_5_6},},
-	},
-	.sync = {NULL,NULL},
-};
-
-void printf_chip_info(Pchip_info pchip) {
-	_disp_l("-------------------------------------");
-	_disp_l("	   Chip Information");
-	_disp_l("-------------------------------------");
-	_disp_l("%-20s : %s", "Chip Status", ui_enum_get_str(chip_status, pchip->status));
-	_disp_l("%-20s : %08x", "FW Version", pchip->version);
-	_disp_l("%-20s : %08x", "Chip  ID", pchip->chip_module);
-	_disp_l("%-20s : %08x", "Service", pchip->hal_service);
-	_disp_l("%-20s : %08x", "Input", pchip->input_support);
-	_disp_l("%-20s : %08x", "Output", pchip->output_support);
-	_disp_l("%-20s : %08x", "Peripheral", pchip->peripheral_en);
-	_disp_l("%-20s : %d", "SDK Version", vatek_version());
-	_disp_l("=====================================\r\n");
-}
 
 vatek_result ts_stream_start(hstream_source hsource) {
 	return vatek_success;
@@ -79,13 +45,26 @@ vatek_result ts_stream_check(hstream_source hsource) {
 void ts_stream_free(hstream_source hsource) {
 }
 
-void FreeVatekContext(char* p) {
+vatek_result source_sync_get_buffer(void* param, uint8_t** pslicebuf) {
+	Ptsstream_source ptssource = (Ptsstream_source)param;
+	vatek_result nres = ptssource->check(ptssource->hsource);
+	if(nres > vatek_success) {
+		*pslicebuf = ptssource->get(ptssource->hsource);
+		nres = (vatek_result)1;
+	}
+	return nres;
+}
+
+int GetVatekSDKVersion() {
+	return vatek_version();
+}
+
+int FreeVatekContext(char* p) {
+	vatek_result nres = vatek_success;
 	VatekContext* ctx = (VatekContext*)p;
 	if(ctx) {
 		if(ctx->hustream) {
-			vatek_result nres = vatek_usbstream_stop(ctx->hustream);
-			if(!is_vatek_success(nres))
-				_disp_err("stop usb_stream fail : %d", nres);
+			nres = vatek_usbstream_stop(ctx->hustream);
 			vatek_usbstream_close(ctx->hustream);
 		}
 
@@ -99,12 +78,27 @@ void FreeVatekContext(char* p) {
 		
 		free(ctx);
 	}
+	return nres;
 }
 
 char* NewVatekContext() {
 	VatekContext* ctx = (VatekContext*)malloc(sizeof(VatekContext));
 	memset(ctx, 0, sizeof(VatekContext));
-	modulator_param_reset(modulator_atsc, &usbcmd.modulator);
+	ctx->usbcmd.mode = ustream_mode_sync;
+	ctx->usbcmd.remux = ustream_remux_pcr;
+	ctx->usbcmd.pcradjust = pcr_adjust;
+	ctx->usbcmd.r2param.freqkhz = 473000;
+	ctx->usbcmd.r2param.mode = r2_cntl_path_0;
+
+	ctx->usbcmd.modulator.bandwidth_symbolrate = 6;
+	ctx->usbcmd.modulator.type = modulator_dvb_t;
+	ctx->usbcmd.modulator.ifmode = ifmode_disable;
+	ctx->usbcmd.modulator.mod.dvb_t.constellation = dvb_t_qam64;
+	ctx->usbcmd.modulator.mod.dvb_t.fft = fft_8k;
+	ctx->usbcmd.modulator.mod.dvb_t.guardinterval = guard_interval_1_16;
+	ctx->usbcmd.modulator.mod.dvb_t.coderate = coderate_5_6;
+
+	modulator_param_reset(modulator_atsc, &ctx->usbcmd.modulator);
 	ctx->streamsource.hsource = NULL;
 	ctx->streamsource.start = ts_stream_start;
 	ctx->streamsource.stop = ts_stream_stop;
@@ -112,28 +106,38 @@ char* NewVatekContext() {
 	ctx->streamsource.check = ts_stream_check;
 	ctx->streamsource.free = ts_stream_free;
 
-	vatek_result nres = vatek_device_list_enum(DEVICE_BUS_USB, service_transform, &ctx->hdevlist);
-	if(is_vatek_success(nres)) {
-		if(nres == 0) {
-			nres = vatek_nodevice;
-			_disp_err("can not found device.");
-		} else {
-			nres = vatek_device_open(ctx->hdevlist, 0, &ctx->hchip);
-			if(!is_vatek_success(nres)) {
-				_disp_err("open device fail : %d", nres);
-			} else {
-				Pchip_info pinfo = vatek_device_get_info(ctx->hchip);
-				printf_chip_info(pinfo);
-				nres = ctx->streamsource.start(ctx->streamsource.hsource);
-			}
-		}
-	} else {
-		_disp_err("enum device fail : %d",nres);
-	}
-
-	if(!is_vatek_success(nres)) {
-		FreeVatekContext((char*)ctx);
-		return NULL;
-	}
 	return (char*)ctx;
 }
+
+int VatekDeviceOpen(char* p) {
+	VatekContext* ctx = (VatekContext*)p;
+	if(ctx) {
+		vatek_result nres = vatek_device_list_enum(DEVICE_BUS_USB, service_transform, &ctx->hdevlist);
+		if(is_vatek_success(nres)) {
+			if(nres == 0) {
+				nres = vatek_nodevice;
+			} else {
+				nres = vatek_device_open(ctx->hdevlist, 0, &ctx->hchip);
+			}
+		}
+		return nres;
+	}
+	return vatek_memfail;
+}
+
+int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, uint32_t* chipId, uint32_t* service, uint32_t* in, uint32_t* out, uint32_t* peripheral) {
+	VatekContext* ctx = (VatekContext*)p;
+	if(ctx && ctx->hchip) {
+		Pchip_info pinfo = vatek_device_get_info(ctx->hchip);
+		if(status) *status = pinfo->status;
+		if(fwVer) *fwVer = pinfo->version;
+		if(chipId) *chipId = pinfo->chip_module;
+		if(service) *service = pinfo->hal_service;
+		if(in) *in = pinfo->input_support;
+		if(out) *out = pinfo->output_support;
+		if(peripheral) *peripheral = pinfo->peripheral_en;
+		return vatek_success;
+	}
+	return vatek_memfail;
+}
+
