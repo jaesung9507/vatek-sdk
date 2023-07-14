@@ -125,7 +125,7 @@ int VatekDeviceOpen(char* p) {
 	return vatek_memfail;
 }
 
-int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, uint32_t* chipId, uint32_t* service, uint32_t* in, uint32_t* out, uint32_t* peripheral) {
+int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, int* chipId, uint32_t* service, uint32_t* in, uint32_t* out, uint32_t* peripheral) {
 	VatekContext* ctx = (VatekContext*)p;
 	if(ctx && ctx->hchip) {
 		Pchip_info pinfo = vatek_device_get_info(ctx->hchip);
