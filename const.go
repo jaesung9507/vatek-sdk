@@ -87,3 +87,35 @@ func (m ServiceMode) String() string {
 	}
 	return "unknown"
 }
+
+type UsbStreamStatus int
+
+const (
+	UsbStreamErrUnknown     = UsbStreamStatus(-1)
+	UsbStreamStatusIdle     = UsbStreamStatus(0)
+	UsbStreamStatusRunning  = UsbStreamStatus(1)
+	UsbStreamStatusMoredata = UsbStreamStatus(2)
+	UsbStreamStatusStopping = UsbStreamStatus(3)
+	UsbStreamStatusStop     = UsbStreamStatus(4)
+)
+
+type TransformMode uint32
+
+const (
+	TransformNULL      = TransformMode(0)
+	TransformEnum      = TransformMode(0x00000003)
+	TransformCapture   = TransformMode(0x00000004)
+	TransformBroadcast = TransformMode(0x00000005)
+)
+
+func (m TransformMode) String() string {
+	switch m {
+	case TransformEnum:
+		return "enum"
+	case TransformCapture:
+		return "capture"
+	case TransformBroadcast:
+		return "broadcast"
+	}
+	return ""
+}

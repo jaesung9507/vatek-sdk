@@ -84,14 +84,16 @@ int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, int* chipId, u
 	VatekContext* ctx = (VatekContext*)p;
 	if(ctx && ctx->hchip) {
 		Pchip_info pinfo = vatek_device_get_info(ctx->hchip);
-		if(status) *status = pinfo->status;
-		if(fwVer) *fwVer = pinfo->version;
-		if(chipId) *chipId = pinfo->chip_module;
-		if(service) *service = pinfo->hal_service;
-		if(in) *in = pinfo->input_support;
-		if(out) *out = pinfo->output_support;
-		if(peripheral) *peripheral = pinfo->peripheral_en;
-		return vatek_success;
+		if(pinfo) {
+			if(status) *status = pinfo->status;
+			if(fwVer) *fwVer = pinfo->version;
+			if(chipId) *chipId = pinfo->chip_module;
+			if(service) *service = pinfo->hal_service;
+			if(in) *in = pinfo->input_support;
+			if(out) *out = pinfo->output_support;
+			if(peripheral) *peripheral = pinfo->peripheral_en;
+			return vatek_success;
+		}
 	}
 	return vatek_memfail;
 }
@@ -112,6 +114,22 @@ int VatekUsbStreamStart(char* p) {
 		ctx->usbcmd.sync.getbuffer = source_sync_get_buffer;
 
 		return vatek_usbstream_start(ctx->hustream, &ctx->usbcmd);
+	}
+	return vatek_memfail;
+}
+
+int GetVatekUsbStreamStatus(char* p, int* status, uint32_t* cur, uint32_t* data, uint32_t* mode) {
+	VatekContext* ctx = (VatekContext*)p;
+	if(ctx && ctx->hustream) {
+		Ptransform_info pinfo = NULL;
+		usbstream_status s = vatek_usbstream_get_status(ctx->hustream, &pinfo);
+		if(status) *status = s;
+		if(pinfo) {
+			if(cur)	*cur = pinfo->info.cur_bitrate;
+			if(data) *data = pinfo->info.data_bitrate;
+			if(mode) *mode = pinfo->mode;
+		}
+		return vatek_success;
 	}
 	return vatek_memfail;
 }

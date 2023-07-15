@@ -13,12 +13,14 @@ int VatekDeviceOpen(char* p);
 int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, int* chipId, uint32_t* service, uint32_t* in, uint32_t* out, uint32_t* peripheral);
 int VatekUsbStreamOpen(char *p);
 int VatekUsbStreamStart(char* p);
+int GetVatekUsbStreamStatus(char* p, int* status, uint32_t* cur, uint32_t* data, uint32_t* mode);
 */
 import "C"
 import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 )
 
 type VatekContext *C.char
@@ -31,6 +33,16 @@ type VatekChipInfo struct {
 	InputSupport  uint32
 	OutputSupport uint32
 	Peripheral    uint32
+}
+
+type BroadcastInfo struct {
+	CurBitrate  uint32
+	DataBitrate uint32
+}
+
+type TransformInfo struct {
+	Info BroadcastInfo
+	Mode TransformMode
 }
 
 func (c *VatekChipInfo) String() string {
@@ -66,6 +78,20 @@ func GetVatekDeviceChipInfo(ctx VatekContext) VatekChipInfo {
 		OutputSupport: uint32(out),
 		Peripheral:    uint32(peripheral),
 	}
+}
+
+func GetVatekUsbStreamStatus(ctx VatekContext) (UsbStreamStatus, TransformInfo) {
+	var status C.int = -1
+	var cur, data, mode C.uint
+	C.GetVatekUsbStreamStatus(ctx, &status, &cur, &data, &mode)
+	tinfo := TransformInfo{
+		Info: BroadcastInfo{
+			CurBitrate:  uint32(cur),
+			DataBitrate: uint32(data),
+		},
+		Mode: TransformMode(mode),
+	}
+	return UsbStreamStatus(status), tinfo
 }
 
 func main() {
@@ -108,8 +134,25 @@ func main() {
 		fmt.Printf("failed to usb stream open: %d\n", errNum)
 		return
 	}
+	errCnt := 0
+	tick := time.Now()
 	for {
-
+		status, info := GetVatekUsbStreamStatus(ctx)
+		if status == UsbStreamStatusRunning {
+			if time.Since(tick) > time.Second {
+				tick = time.Now()
+				fmt.Printf("Data:[%d]  Current:[%d]\n", info.Info.DataBitrate, info.Info.CurBitrate)
+				if info.Info.DataBitrate == 0 || info.Info.CurBitrate == 0 {
+					errCnt++
+				}
+				if errCnt >= 30 {
+					break
+				}
+			}
+		} else {
+			break
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -118,7 +161,6 @@ var frames [][]byte
 
 //export GetTsFrame
 func GetTsFrame() *C.uchar {
-	fmt.Printf("%d/%d (%d): get ts frame\n", index, len(frames[index]), frames[index][0])
 	p := (*C.uchar)(C.CBytes(frames[index]))
 	index++
 	if index >= len(frames) {
