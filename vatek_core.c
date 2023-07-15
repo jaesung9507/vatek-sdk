@@ -1,58 +1,19 @@
 ﻿#include <vatek_sdk_usbstream.h>
 
-typedef void* hstream_source;
-typedef vatek_result(*fpstream_source_start)(hstream_source hsource);
-typedef vatek_result(*fpstream_source_check)(hstream_source hsource);
-typedef uint8_t*(*fpstream_source_get)(hstream_source hsource);
-typedef vatek_result(*fpstream_source_stop)(hstream_source hsource);
-typedef void(*fpstream_source_free)(hstream_source hsource);
-
-typedef struct _tsstream_source {
-	hstream_source hsource;
-	fpstream_source_start start;
-	fpstream_source_check check;
-	fpstream_source_get get;
-	fpstream_source_stop stop;
-	fpstream_source_free free;
-} tsstream_source, *Ptsstream_source;
+extern uint8_t* GetTsFrame();
 
 typedef struct vatek_context {
 	hvatek_devices hdevlist;
 	hvatek_chip hchip;
 	hvatek_usbstream hustream;
-	tsstream_source streamsource;
 	hmux_core hmux;
 	hmux_channel m_hchannel;
 	usbstream_param usbcmd;
 } VatekContext;
 
-vatek_result ts_stream_start(hstream_source hsource) {
-	return vatek_success;
-}
-
-vatek_result ts_stream_stop(hstream_source hsource) {
-	return vatek_success;
-}
-
-uint8_t* ts_stream_get(hstream_source hsource) {
-	return NULL;
-}
-
-vatek_result ts_stream_check(hstream_source hsource) {
-	return vatek_success;
-}
-
-void ts_stream_free(hstream_source hsource) {
-}
-
 vatek_result source_sync_get_buffer(void* param, uint8_t** pslicebuf) {
-	Ptsstream_source ptssource = (Ptsstream_source)param;
-	vatek_result nres = ptssource->check(ptssource->hsource);
-	if(nres > vatek_success) {
-		*pslicebuf = ptssource->get(ptssource->hsource);
-		nres = (vatek_result)1;
-	}
-	return nres;
+	*pslicebuf = (uint8_t*)GetTsFrame();
+	return (vatek_result)1;
 }
 
 int GetVatekSDKVersion() {
@@ -72,10 +33,10 @@ int FreeVatekContext(char* p) {
 			//reboot chip
 			vatek_device_close_reboot(ctx->hchip);
 		}
-		if(ctx->hdevlist)vatek_device_list_free(ctx->hdevlist);
-		if(ctx->streamsource.hsource)
-			ctx->streamsource.free(ctx->streamsource.hsource);
-		
+		if(ctx->hdevlist) {
+			vatek_device_list_free(ctx->hdevlist);
+		}
+
 		free(ctx);
 	}
 	return nres;
@@ -99,12 +60,6 @@ char* NewVatekContext() {
 	ctx->usbcmd.modulator.mod.dvb_t.coderate = coderate_5_6;
 
 	modulator_param_reset(modulator_atsc, &ctx->usbcmd.modulator);
-	ctx->streamsource.hsource = NULL;
-	ctx->streamsource.start = ts_stream_start;
-	ctx->streamsource.stop = ts_stream_stop;
-	ctx->streamsource.get = ts_stream_get;
-	ctx->streamsource.check = ts_stream_check;
-	ctx->streamsource.free = ts_stream_free;
 
 	return (char*)ctx;
 }
@@ -141,3 +96,22 @@ int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, int* chipId, u
 	return vatek_memfail;
 }
 
+int VatekUsbStreamOpen(char *p) {
+	VatekContext* ctx = (VatekContext*)p;
+	if(ctx) {
+		return vatek_usbstream_open(ctx->hchip, &ctx->hustream);
+	}
+	return vatek_memfail;
+}
+
+int VatekUsbStreamStart(char* p) {
+	VatekContext* ctx = (VatekContext*)p;
+	if(ctx) {
+		ctx->usbcmd.mode = ustream_mode_sync;
+		ctx->usbcmd.sync.param = NULL;
+		ctx->usbcmd.sync.getbuffer = source_sync_get_buffer;
+
+		return vatek_usbstream_start(ctx->hustream, &ctx->usbcmd);
+	}
+	return vatek_memfail;
+}
