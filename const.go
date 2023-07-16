@@ -1,5 +1,60 @@
 package main
 
+import "fmt"
+
+type VatekError int
+
+const (
+	VatekErrBufferEmpty = VatekError(-14)
+	VatekErrSize        = VatekError(-13)
+	VatekErrCrcFail     = VatekError(-12)
+	VatekErrMemFail     = VatekError(-11)
+	VatekErrFormat      = VatekError(-10)
+	VatekErrNoDevice    = VatekError(-9)
+	VatekErrBusy        = VatekError(-8)
+	VatekErrTimeout     = VatekError(-7)
+	VatekErrHwFail      = VatekError(-6)
+	VatekErrBadStatus   = VatekError(-5)
+	VatekErrBufOverflow = VatekError(-4)
+	VatekErrBadParam    = VatekError(-3)
+	VatekErrUnsupport   = VatekError(-2)
+	VatekErrUnknown     = VatekError(-1)
+)
+
+func (err VatekError) Error() string {
+	switch err {
+	case VatekErrBufferEmpty:
+		return "buffer empty"
+	case VatekErrSize:
+		return "size error (value not support)"
+	case VatekErrCrcFail:
+		return "check crc fail"
+	case VatekErrMemFail:
+		return "memory alloc fail or overflow"
+	case VatekErrFormat:
+		return "format not current"
+	case VatekErrNoDevice:
+		return "device not exists"
+	case VatekErrBusy:
+		return "system is busy"
+	case VatekErrTimeout:
+		return "wait operation timeout"
+	case VatekErrHwFail:
+		return "send command to device fail or call system api fail"
+	case VatekErrBadStatus:
+		return "can not call at this device status"
+	case VatekErrBufOverflow:
+		return "memory size limited overflow"
+	case VatekErrBadParam:
+		return "parameter set not supported"
+	case VatekErrUnsupport:
+		return "function not supported"
+	case VatekErrUnknown:
+		return "unknown fail"
+	}
+	return fmt.Sprintf("%d", err)
+}
+
 type ChipStatus int
 
 const (

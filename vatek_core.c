@@ -64,7 +64,7 @@ char* NewVatekContext() {
 	return (char*)ctx;
 }
 
-int VatekDeviceOpen(char* p) {
+int VatekUsbDeviceOpen(char* p) {
 	VatekContext* ctx = (VatekContext*)p;
 	if(ctx) {
 		vatek_result nres = vatek_device_list_enum(DEVICE_BUS_USB, service_transform, &ctx->hdevlist);

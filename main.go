@@ -9,7 +9,7 @@ package main
 int GetVatekSDKVersion();
 char* NewVatekContext();
 int FreeVatekContext(char* p);
-int VatekDeviceOpen(char* p);
+int VatekUsbDeviceOpen(char* p);
 int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, int* chipId, uint32_t* service, uint32_t* in, uint32_t* out, uint32_t* peripheral);
 int VatekUsbStreamOpen(char *p);
 int VatekUsbStreamStart(char* p);
@@ -23,7 +23,9 @@ import (
 	"time"
 )
 
-type VatekContext *C.char
+type VatekContext struct {
+	p *C.char
+}
 
 type VatekChipInfo struct {
 	Status        ChipStatus
@@ -43,6 +45,38 @@ type BroadcastInfo struct {
 type TransformInfo struct {
 	Info BroadcastInfo
 	Mode TransformMode
+}
+
+func NewVatekContext() VatekContext {
+	return VatekContext{p: C.NewVatekContext()}
+}
+
+func (ctx *VatekContext) Close() {
+	C.FreeVatekContext(ctx.p)
+}
+
+func (ctx *VatekContext) UsbDeviceOpen() error {
+	errNum := C.VatekUsbDeviceOpen(ctx.p)
+	if errNum < 0 {
+		return VatekError(errNum)
+	}
+	return nil
+}
+
+func (ctx *VatekContext) UsbStreamOpen() error {
+	errNum := C.VatekUsbStreamOpen(ctx.p)
+	if errNum < 0 {
+		return VatekError(errNum)
+	}
+	return nil
+}
+
+func (ctx *VatekContext) UsbStreamStart() error {
+	errNum := C.VatekUsbStreamStart(ctx.p)
+	if errNum < 0 {
+		return VatekError(errNum)
+	}
+	return nil
 }
 
 func (c *VatekChipInfo) String() string {
@@ -65,10 +99,10 @@ func GetVatekSDKVersion() int {
 	return int(C.GetVatekSDKVersion())
 }
 
-func GetVatekDeviceChipInfo(ctx VatekContext) VatekChipInfo {
+func (ctx *VatekContext) GetDeviceChipInfo() VatekChipInfo {
 	var status, chipId C.int
 	var fwVer, service, in, out, peripheral C.uint
-	C.GetVatekDeviceChipInfo(ctx, &status, &fwVer, &chipId, &service, &in, &out, &peripheral)
+	C.GetVatekDeviceChipInfo(ctx.p, &status, &fwVer, &chipId, &service, &in, &out, &peripheral)
 	return VatekChipInfo{
 		Status:        ChipStatus(status),
 		FwVer:         uint32(fwVer),
@@ -80,10 +114,10 @@ func GetVatekDeviceChipInfo(ctx VatekContext) VatekChipInfo {
 	}
 }
 
-func GetVatekUsbStreamStatus(ctx VatekContext) (UsbStreamStatus, TransformInfo) {
+func (ctx *VatekContext) GetUsbStreamStatus() (UsbStreamStatus, TransformInfo) {
 	var status C.int = -1
 	var cur, data, mode C.uint
-	C.GetVatekUsbStreamStatus(ctx, &status, &cur, &data, &mode)
+	C.GetVatekUsbStreamStatus(ctx.p, &status, &cur, &data, &mode)
 	tinfo := TransformInfo{
 		Info: BroadcastInfo{
 			CurBitrate:  uint32(cur),
@@ -95,19 +129,18 @@ func GetVatekUsbStreamStatus(ctx VatekContext) (UsbStreamStatus, TransformInfo) 
 }
 
 func main() {
-	ctx := VatekContext(C.NewVatekContext())
-	defer C.FreeVatekContext(ctx)
-	errNum := C.VatekDeviceOpen(ctx)
-	if errNum < 0 {
-		fmt.Printf("failed to device open: %d\n", errNum)
+	ctx := NewVatekContext()
+	defer ctx.Close()
+	err := ctx.UsbDeviceOpen()
+	if err != nil {
+		fmt.Printf("failed to device open: %s\n", err.Error())
 		return
 	}
-	chip := GetVatekDeviceChipInfo(ctx)
+	chip := ctx.GetDeviceChipInfo()
 	fmt.Print(chip.String())
 
-	errNum = C.VatekUsbStreamOpen(ctx)
-	if errNum < 0 {
-		fmt.Printf("failed to usb stream open: %d\n", errNum)
+	if err = ctx.UsbStreamOpen(); err != nil {
+		fmt.Printf("failed to usb stream open: %s\n", err.Error())
 		return
 	}
 
@@ -129,15 +162,14 @@ func main() {
 		buf = buf[24064:]
 	}
 
-	C.VatekUsbStreamStart(ctx)
-	if errNum < 0 {
-		fmt.Printf("failed to usb stream open: %d\n", errNum)
+	if err = ctx.UsbStreamStart(); err != nil {
+		fmt.Printf("failed to usb stream open: %s\n", err.Error())
 		return
 	}
 	errCnt := 0
 	tick := time.Now()
 	for {
-		status, info := GetVatekUsbStreamStatus(ctx)
+		status, info := ctx.GetUsbStreamStatus()
 		if status == UsbStreamStatusRunning {
 			if time.Since(tick) > time.Second {
 				tick = time.Now()
