@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -47,6 +48,11 @@ type TransformInfo struct {
 	Mode TransformMode
 }
 
+var (
+	vatekTsFrameCallback     = make(map[*C.char]func() []byte)
+	vatekTsFrameCallbackLock sync.Mutex
+)
+
 func NewVatekContext() VatekContext {
 	return VatekContext{p: C.NewVatekContext()}
 }
@@ -71,11 +77,16 @@ func (ctx *VatekContext) UsbStreamOpen() error {
 	return nil
 }
 
-func (ctx *VatekContext) UsbStreamStart() error {
+func (ctx *VatekContext) UsbStreamStart(getTsFrame func() []byte) error {
+	vatekTsFrameCallbackLock.Lock()
+	defer vatekTsFrameCallbackLock.Unlock()
+	vatekTsFrameCallback[ctx.p] = getTsFrame
 	errNum := C.VatekUsbStreamStart(ctx.p)
 	if errNum < 0 {
+		delete(vatekTsFrameCallback, ctx.p)
 		return VatekError(errNum)
 	}
+
 	return nil
 }
 
@@ -155,6 +166,8 @@ func main() {
 	}
 	defer f.Close()
 
+	var index = 0
+	var frames [][]byte
 	buf, _ := io.ReadAll(f)
 	for len(buf) >= 24064 {
 		frame := buf[:24064]
@@ -162,7 +175,14 @@ func main() {
 		buf = buf[24064:]
 	}
 
-	if err = ctx.UsbStreamStart(); err != nil {
+	if err = ctx.UsbStreamStart(func() []byte {
+		buf := frames[index]
+		index++
+		if index >= len(frames) {
+			index = 0
+		}
+		return buf
+	}); err != nil {
 		fmt.Printf("failed to usb stream open: %s\n", err.Error())
 		return
 	}
@@ -188,16 +208,10 @@ func main() {
 	}
 }
 
-var index = 0
-var frames [][]byte
-
 //export GetTsFrame
-func GetTsFrame() *C.uchar {
-	p := (*C.uchar)(C.CBytes(frames[index]))
-	index++
-	if index >= len(frames) {
-		index = 0
-	}
+func GetTsFrame(param *C.char) *C.uchar {
+	vatekTsFrameCallbackLock.Lock()
+	defer vatekTsFrameCallbackLock.Unlock()
 
-	return p
+	return (*C.uchar)(C.CBytes(vatekTsFrameCallback[param]()))
 }
