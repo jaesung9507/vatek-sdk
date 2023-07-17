@@ -12,6 +12,7 @@ int FreeVatekContext(char* p);
 int VatekUsbDeviceOpen(char* p);
 int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, int* chipId, uint32_t* service, uint32_t* in, uint32_t* out, uint32_t* peripheral);
 int VatekUsbStreamOpen(char *p);
+int SetVatekCallbackParam(char* p, void* param);
 int VatekUsbStreamStart(char* p);
 int GetVatekUsbStreamStatus(char* p, int* status, uint32_t* cur, uint32_t* data, uint32_t* mode);
 */
@@ -20,12 +21,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"time"
+	"unsafe"
 )
 
 type VatekContext struct {
-	p *C.char
+	p           *C.char
+	getTsStream func() []byte
 }
 
 type VatekChipInfo struct {
@@ -47,11 +49,6 @@ type TransformInfo struct {
 	Info BroadcastInfo
 	Mode TransformMode
 }
-
-var (
-	vatekTsFrameCallback     = make(map[*C.char]func() []byte)
-	vatekTsFrameCallbackLock sync.Mutex
-)
 
 func NewVatekContext() VatekContext {
 	return VatekContext{p: C.NewVatekContext()}
@@ -78,12 +75,12 @@ func (ctx *VatekContext) UsbStreamOpen() error {
 }
 
 func (ctx *VatekContext) UsbStreamStart(getTsFrame func() []byte) error {
-	vatekTsFrameCallbackLock.Lock()
-	defer vatekTsFrameCallbackLock.Unlock()
-	vatekTsFrameCallback[ctx.p] = getTsFrame
+	if ctx.getTsStream == nil {
+		C.SetVatekCallbackParam(ctx.p, unsafe.Pointer(ctx))
+	}
+	ctx.getTsStream = getTsFrame
 	errNum := C.VatekUsbStreamStart(ctx.p)
 	if errNum < 0 {
-		delete(vatekTsFrameCallback, ctx.p)
 		return VatekError(errNum)
 	}
 
@@ -209,9 +206,7 @@ func main() {
 }
 
 //export GetTsFrame
-func GetTsFrame(param *C.char) *C.uchar {
-	vatekTsFrameCallbackLock.Lock()
-	defer vatekTsFrameCallbackLock.Unlock()
-
-	return (*C.uchar)(C.CBytes(vatekTsFrameCallback[param]()))
+func GetTsFrame(param unsafe.Pointer) *C.uchar {
+	ctx := (*VatekContext)(param)
+	return (*C.uchar)(C.CBytes(ctx.getTsStream()))
 }

@@ -1,6 +1,6 @@
 ﻿#include <vatek_sdk_usbstream.h>
 
-extern uint8_t* GetTsFrame(char* param);
+extern uint8_t* GetTsFrame(void* param);
 
 typedef struct vatek_context {
 	hvatek_devices hdevlist;
@@ -13,8 +13,8 @@ typedef struct vatek_context {
 } VatekContext;
 
 vatek_result source_sync_get_buffer(void* param, uint8_t** pslicebuf) {
-	VatekContext* ctx = (VatekContext*)param;
-	uint8_t* buf = GetTsFrame((char*)ctx);
+	VatekContext* ctx = (VatekContext*)*((uint64_t*)param);
+	uint8_t* buf = GetTsFrame(param);
 	memcpy(ctx->buf, buf, CHIP_STREAM_SLICE_LEN);
 	free(buf);
 	*pslicebuf = ctx->buf;
@@ -111,13 +111,20 @@ int VatekUsbStreamOpen(char *p) {
 	return vatek_memfail;
 }
 
-int VatekUsbStreamStart(char* p) {
+int SetVatekCallbackParam(char* p, void* param) {
 	VatekContext* ctx = (VatekContext*)p;
 	if(ctx) {
 		ctx->usbcmd.mode = ustream_mode_sync;
-		ctx->usbcmd.sync.param = ctx;
+		ctx->usbcmd.sync.param = param;
 		ctx->usbcmd.sync.getbuffer = source_sync_get_buffer;
+		return vatek_success;
+	}
+	return vatek_memfail;
+}
 
+int VatekUsbStreamStart(char* p) {
+	VatekContext* ctx = (VatekContext*)p;
+	if(ctx) {
 		return vatek_usbstream_start(ctx->hustream, &ctx->usbcmd);
 	}
 	return vatek_memfail;
