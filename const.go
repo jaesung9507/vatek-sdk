@@ -2,6 +2,8 @@ package main
 
 import "fmt"
 
+const ChipStreamSliceLen = 24064
+
 type VatekError int
 
 const (

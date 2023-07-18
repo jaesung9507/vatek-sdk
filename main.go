@@ -163,21 +163,11 @@ func main() {
 	}
 	defer f.Close()
 
-	var index = 0
-	var frames [][]byte
-	buf, _ := io.ReadAll(f)
-	for len(buf) >= 24064 {
-		frame := buf[:24064]
-		frames = append(frames, frame)
-		buf = buf[24064:]
-	}
-
+	frames, _ := io.ReadAll(f)
 	if err = ctx.UsbStreamStart(func() []byte {
-		buf := frames[index]
-		index++
-		if index >= len(frames) {
-			index = 0
-		}
+		buf := frames[:ChipStreamSliceLen]
+		frames = frames[ChipStreamSliceLen:]
+		frames = append(frames, buf...)
 		return buf
 	}); err != nil {
 		fmt.Printf("failed to usb stream open: %s\n", err.Error())
