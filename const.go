@@ -57,6 +57,20 @@ func (err VatekError) Error() string {
 	return fmt.Sprintf("%d", err)
 }
 
+type ModulatorType int
+
+const (
+	ModulatorUnknown = ModulatorType(-1)
+	ModulatorDVB_T   = ModulatorType(0)
+	ModulatorJ83A    = ModulatorType(1)
+	ModulatorATSC    = ModulatorType(2)
+	ModulatorJ83B    = ModulatorType(3)
+	ModulatorDTMB    = ModulatorType(4)
+	ModulatorISDB_T  = ModulatorType(5)
+	ModulatorJ83C    = ModulatorType(6)
+	ModulatorDVB_T2  = ModulatorType(7)
+)
+
 type ChipStatus int
 
 const (

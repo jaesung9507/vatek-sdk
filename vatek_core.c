@@ -47,24 +47,23 @@ int FreeVatekContext(char* p) {
 	return nres;
 }
 
-char* NewVatekContext() {
+char* NewVatekContext(int modulatorType, uint32_t freqkhz) {
 	VatekContext* ctx = (VatekContext*)malloc(sizeof(VatekContext));
 	memset(ctx, 0, sizeof(VatekContext));
 	ctx->usbcmd.mode = ustream_mode_sync;
 	ctx->usbcmd.remux = ustream_remux_pcr;
 	ctx->usbcmd.pcradjust = pcr_adjust;
-	ctx->usbcmd.r2param.freqkhz = 473000;
+	ctx->usbcmd.r2param.freqkhz = freqkhz;
 	ctx->usbcmd.r2param.mode = r2_cntl_path_0;
 
 	ctx->usbcmd.modulator.bandwidth_symbolrate = 6;
-	ctx->usbcmd.modulator.type = modulator_dvb_t;
 	ctx->usbcmd.modulator.ifmode = ifmode_disable;
 	ctx->usbcmd.modulator.mod.dvb_t.constellation = dvb_t_qam64;
 	ctx->usbcmd.modulator.mod.dvb_t.fft = fft_8k;
 	ctx->usbcmd.modulator.mod.dvb_t.guardinterval = guard_interval_1_16;
 	ctx->usbcmd.modulator.mod.dvb_t.coderate = coderate_5_6;
 
-	modulator_param_reset(modulator_atsc, &ctx->usbcmd.modulator);
+	modulator_param_reset((modulator_type)modulatorType, &ctx->usbcmd.modulator);
 
 	return (char*)ctx;
 }

@@ -7,7 +7,7 @@ package main
 #include <stdint.h>
 
 int GetVatekSDKVersion();
-char* NewVatekContext();
+char* NewVatekContext(int modulatorType, uint32_t freqkhz);
 int FreeVatekContext(char* p);
 int VatekUsbDeviceOpen(char* p);
 int GetVatekDeviceChipInfo(char* p, int* status, uint32_t* fwVer, int* chipId, uint32_t* service, uint32_t* in, uint32_t* out, uint32_t* peripheral);
@@ -50,8 +50,8 @@ type TransformInfo struct {
 	Mode TransformMode
 }
 
-func NewVatekContext() VatekContext {
-	return VatekContext{p: C.NewVatekContext()}
+func NewVatekContext(modulatorType ModulatorType, freqkhz uint32) VatekContext {
+	return VatekContext{p: C.NewVatekContext(C.int(modulatorType), C.uint(freqkhz))}
 }
 
 func (ctx *VatekContext) Close() {
@@ -137,7 +137,7 @@ func (ctx *VatekContext) GetUsbStreamStatus() (UsbStreamStatus, TransformInfo) {
 }
 
 func main() {
-	ctx := NewVatekContext()
+	ctx := NewVatekContext(ModulatorATSC, 473000)
 	defer ctx.Close()
 	err := ctx.UsbDeviceOpen()
 	if err != nil {
