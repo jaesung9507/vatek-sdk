@@ -1,8 +1,8 @@
 package main
 
 /*
-#cgo CFLAGS: -I ./include
-#cgo LDFLAGS: -L ./lib -lvatek_core -lusb-1.0
+#cgo CFLAGS: -I /usr/local/include/vatek
+#cgo LDFLAGS: -lvatek_core -lusb-1.0
 
 #include <stdint.h>
 
